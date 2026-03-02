@@ -1,0 +1,126 @@
+###############################################################################
+# Node Exporter (DaemonSet)
+#
+# node_exporter is a Prometheus exporter that runs on every node and exposes
+# hardware/OS-level metrics: CPU usage, memory, disk I/O, network stats,
+# filesystem usage, and more.
+#
+# It runs as a DaemonSet so Kubernetes automatically schedules one pod per
+# node (including new nodes added later).
+#
+# Prometheus discovers it via the prometheus.io/scrape annotation.
+#
+# Deploy with:
+#   kubectl apply -f 02-node-exporter.yaml
+#
+# Verify:
+#   kubectl -n monitoring get pods -l app=node-exporter
+#   curl http://<node-ip>:9100/metrics   (from within cluster network)
+###############################################################################
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+      annotations:
+        # These annotations tell Prometheus to auto-discover and scrape this pod
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      # Use the host network and PID namespace so node_exporter can see
+      # actual host-level metrics rather than container-level metrics
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args:
+            # Mount the host filesystem read-only at /host inside the container
+            # so node_exporter can read /proc, /sys, etc. from the real host
+            - '--path.procfs=/host/proc'
+            - '--path.sysfs=/host/sys'
+            - '--path.rootfs=/host/root'
+            # Exclude virtual/container filesystems from disk metrics to reduce noise
+            - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)'
+          ports:
+            - name: metrics
+              containerPort: 9100
+              hostPort: 9100
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          # node_exporter only reads from the host — lock it down
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: root
+              mountPath: /host/root
+              readOnly: true
+              mountPropagation: HostToContainer
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: root
+          hostPath:
+            path: /
+      # Tolerate all taints so it runs on ALL nodes including control plane
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+
+---
+# Service — provides a stable DNS name for node-exporter
+# Not strictly needed since Prometheus discovers pods directly,
+# but useful for manual debugging
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+spec:
+  type: ClusterIP
+  clusterIP: None   # Headless service — no load balancing, direct pod IPs
+  selector:
+    app: node-exporter
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+      protocol: TCP

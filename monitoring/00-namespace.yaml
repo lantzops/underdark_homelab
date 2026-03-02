@@ -1,0 +1,16 @@
+###############################################################################
+# Monitoring Namespace
+#
+# Isolates all monitoring workloads into their own namespace.
+# Deploy this FIRST before any other monitoring manifests.
+#
+# Deploy with:
+#   kubectl apply -f 00-namespace.yaml
+###############################################################################
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/part-of: monitoring-stack

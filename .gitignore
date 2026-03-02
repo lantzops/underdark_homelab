@@ -1,0 +1,12 @@
+# Don't commit certificates or keys
+*.pem
+*.key
+*.crt
+*.csr
+*.kubeconfig
+
+# OS junk
+.DS_Store
+*.swp
+*.swo
+*~
