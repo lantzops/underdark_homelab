@@ -1,0 +1,27 @@
+---
+- name: KVM/libvirt setup for baator
+  hosts: baator
+  become: true
+  tasks:
+    - name: Install KVM and libvirt packages
+      ansible.builtin.dnf:
+        name:
+          - qemu-kvm
+          - libvirt
+          - libvirt-client
+          - virt-install
+          - virt-manager
+          - libguestfs-tools
+        state: present
+
+    - name: Enable and start libvirtd
+      ansible.builtin.systemd:
+        name: libvirtd
+        state: started
+        enabled: true
+
+    - name: Add lantzops to libvirt group
+      ansible.builtin.user:
+        name: lantzops
+        groups: libvirt
+        append: true
