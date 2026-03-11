@@ -7,6 +7,13 @@
       community.general.timezone:
         name: America/Denver
 
+    - name: Enable EPEL repository (RHEL family)
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+        disable_gpg_check: true
+      when: ansible_facts['os_family'] == "RedHat"
+
     - name: Ensure common packages are installed (RHEL family)
       ansible.builtin.dnf:
         name:
@@ -65,3 +72,12 @@
         create: true
         mode: '0440'
         validate: 'visudo -cf %s'
+
+    - name: Install server-specific packages
+      ansible.builtin.dnf:
+        name:
+          - ipmitool
+        state: present
+      when: "'servers' in group_names"
+
+    
